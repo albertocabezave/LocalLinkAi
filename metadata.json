@@ -1,0 +1,7 @@
+{
+  "name": "LocalLink AI",
+  "description": "An intelligent local delivery application that allows users to find products and businesses, view them on an interactive map, and simulate real-time driver tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
