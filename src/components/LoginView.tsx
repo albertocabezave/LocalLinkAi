@@ -1,95 +1,83 @@
 import React, { useState } from "react";
-import { loginUser } from "../auth/authService";
-import RegisterView from "./RegisterView";
+import { loginUser, registerUser } from "../auth/authService";
+import PhoneVerification from "./PhoneVerification";
 
 export default function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [userTemp, setUserTemp] = useState<any>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [showRegister, setShowRegister] = useState(false);
 
-  if (showRegister) {
+  // Iniciar sesión
+  const handleLogin = async () => {
+    try {
+      const user = await loginUser(email, password);
+      onLogin(user);
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    }
+  };
+
+  // Registrar usuario
+  const handleRegister = async () => {
+    try {
+      const user = await registerUser(email, password);
+      setUserTemp(user); // Guardamos el usuario temporal
+      setShowPhoneVerification(true); // Mostramos la verificación
+    } catch (error: any) {
+      alert("Error al registrar: " + error.message);
+    }
+  };
+
+  // Si debe verificar teléfono, mostramos ese componente
+  if (showPhoneVerification && userTemp) {
     return (
-      <RegisterView
-        onRegisterSuccess={(user) => {
-          onLogin(user);
+      <PhoneVerification
+        onVerified={() => {
+          alert("✅ Usuario verificado completamente");
+          onLogin(userTemp);
         }}
       />
     );
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const user = await loginUser(email, password);
-      onLogin(user);
-    } catch (err: any) {
-      setError(err.message || "Error al iniciar sesión");
-    }
-  };
-
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-2xl shadow-md w-80">
-        <h2 className="text-2xl font-bold text-center text-blue-700 mb-4">
-          Iniciar Sesión
-        </h2>
-        <form onSubmit={handleLogin} className="flex flex-col">
-          <input
-            type="email"
-            placeholder="Correo electrónico"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border border-gray-300 rounded-md p-2 mb-3"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-gray-300 rounded-md p-2 mb-4"
-            required
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white rounded-md py-2 hover:bg-blue-700 transition"
-          >
-            Entrar
-          </button>
-	<button
-  onClick={async () => {
-    const { loginWithGoogle } = await import("../auth/authService");
-    try {
-      const user = await loginWithGoogle();
-      onLogin(user);
-    } catch (error) {
-      console.error("Error al iniciar con Google:", error);
-    }
-  }}
-  className="w-full mt-3 bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
->
-  <img
-    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-    alt="Google"
-    className="w-5 h-5"
-  />
-  Entrar con Google
-</button>
-        </form>
+    <div className="h-screen flex flex-col items-center justify-center bg-gray-100">
+      <h2 className="text-2xl font-bold mb-4 text-blue-700">
+        {isRegistering ? "Crear cuenta" : "Iniciar sesión"}
+      </h2>
 
-        {error && <p className="text-red-500 text-sm mt-3 text-center">{error}</p>}
+      <input
+        type="email"
+        placeholder="Correo"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="border p-2 rounded mb-2 w-64"
+      />
+      <input
+        type="password"
+        placeholder="Contraseña"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="border p-2 rounded mb-2 w-64"
+      />
 
-        <p className="text-gray-600 text-center mt-4">
-          ¿No tienes cuenta?{" "}
-          <button
-            onClick={() => setShowRegister(true)}
-            className="text-blue-600 hover:underline"
-          >
-            Crear una
-          </button>
-        </p>
-      </div>
+      <button
+        onClick={isRegistering ? handleRegister : handleLogin}
+        className="bg-blue-500 text-white px-4 py-2 rounded w-64 mb-4"
+      >
+        {isRegistering ? "Registrarse" : "Entrar"}
+      </button>
+
+      <p
+        onClick={() => setIsRegistering(!isRegistering)}
+        className="text-sm text-gray-600 underline cursor-pointer"
+      >
+        {isRegistering
+          ? "¿Ya tienes cuenta? Inicia sesión"
+          : "¿No tienes cuenta? Regístrate"}
+      </p>
     </div>
   );
 }
