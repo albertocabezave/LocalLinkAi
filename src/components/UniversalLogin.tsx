@@ -8,17 +8,15 @@ import {
 } from "firebase/auth";
 
 export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => void }) {
-  const [identifier, setIdentifier] = useState(""); // correo o teléfono
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 🔹 Detectar si es correo o teléfono
   const isEmail = identifier.includes("@");
 
-  // 🔹 Inicializar el reCAPTCHA invisible (para SMS)
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
@@ -27,34 +25,29 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
     }
   };
 
-  // 🚀 Iniciar sesión o registrar
   const handleSubmit = async () => {
     setLoading(true);
     try {
       if (isEmail) {
-        // 📨 Autenticación por correo
         const userCredential = isRegister
           ? await createUserWithEmailAndPassword(auth, identifier, password)
           : await signInWithEmailAndPassword(auth, identifier, password);
-
         onLogin(userCredential.user);
       } else {
-        // 📱 Autenticación por teléfono
         setupRecaptcha();
         const appVerifier = window.recaptchaVerifier;
         const confirmation = await signInWithPhoneNumber(auth, identifier, appVerifier);
         setConfirmationResult(confirmation);
-        alert("Código SMS enviado al número " + identifier);
+        alert("📱 Código SMS enviado al número " + identifier);
       }
     } catch (error: any) {
-      alert("❌ Error: " + error.message);
+      alert("❌ " + error.message);
     }
     setLoading(false);
   };
 
-  // ✅ Confirmar código SMS
   const verifyCode = async () => {
-    if (!confirmationResult) return alert("Primero debes enviar el código");
+    if (!confirmationResult) return alert("Primero envía el código");
     try {
       const result = await confirmationResult.confirm(code);
       const user = result.user;
@@ -66,63 +59,67 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-      <h2 className="text-2xl font-bold mb-4 text-blue-700">
-        {isRegister ? "Crear cuenta" : "Iniciar sesión"}
-      </h2>
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 to-blue-300">
+      <div className="bg-white shadow-xl rounded-2xl p-8 w-80 text-center">
+        <h2 className="text-2xl font-bold text-blue-700 mb-6">
+          {isRegister ? "Crear cuenta" : "Iniciar sesión"}
+        </h2>
 
-      <input
-        type="text"
-        placeholder="Correo o número (+58...)"
-        value={identifier}
-        onChange={(e) => setIdentifier(e.target.value)}
-        className="border p-2 rounded mb-2 w-64"
-      />
-
-      {isEmail && (
         <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="border p-2 rounded mb-2 w-64"
+          type="text"
+          placeholder="Correo o número (+58...)"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          className="w-full border border-gray-300 p-2 rounded mb-3 focus:outline-blue-400"
         />
-      )}
 
-      {!confirmationResult ? (
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
-        >
-          {loading ? "Procesando..." : isRegister ? "Registrarse" : "Entrar"}
-        </button>
-      ) : (
-        <>
+        {isEmail && (
           <input
-            type="text"
-            placeholder="Código de verificación"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="border p-2 rounded mb-2 w-64"
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full border border-gray-300 p-2 rounded mb-4 focus:outline-blue-400"
           />
+        )}
+
+        {!confirmationResult ? (
           <button
-            onClick={verifyCode}
-            className="bg-green-500 text-white px-4 py-2 rounded"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-4 transition"
           >
-            Verificar código
+            {loading ? "Procesando..." : isRegister ? "Registrarse" : "Entrar"}
           </button>
-        </>
-      )}
+        ) : (
+          <>
+            <input
+              type="text"
+              placeholder="Código SMS"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full border border-gray-300 p-2 rounded mb-3 focus:outline-blue-400"
+            />
+            <button
+              onClick={verifyCode}
+              className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg mb-4 transition"
+            >
+              Verificar código
+            </button>
+          </>
+        )}
 
-      <p
-        onClick={() => setIsRegister(!isRegister)}
-        className="text-blue-600 mt-4 cursor-pointer hover:underline"
-      >
-        {isRegister ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
-      </p>
+        <p
+          onClick={() => setIsRegister(!isRegister)}
+          className="text-blue-600 cursor-pointer hover:underline"
+        >
+          {isRegister
+            ? "¿Ya tienes cuenta? Inicia sesión"
+            : "¿No tienes cuenta? Regístrate"}
+        </p>
 
-      <div id="recaptcha-container" className="mt-4"></div>
+        <div id="recaptcha-container" className="mt-4"></div>
+      </div>
     </div>
   );
 }

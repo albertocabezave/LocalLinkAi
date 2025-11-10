@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import LoginView from "./components/LoginView";
+import UniversalLogin from "./components/UniversalLogin";
 import PhoneVerification from "./components/PhoneVerification";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase/firebaseConfig";
@@ -31,7 +31,7 @@ export default function App() {
 
   // 🚪 Si no hay usuario autenticado, mostrar pantalla de login
   if (!user) {
-    return <LoginView onLogin={setUser} />;
+    return <UniversalLogin onLogin={setUser} />;
   }
 
   // 📱 Si hay usuario pero no tiene teléfono verificado, mostrar pantalla de verificación
