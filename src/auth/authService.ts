@@ -44,3 +44,28 @@ export const loginWithGoogle = async () => {
     throw error;
   }
 };
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig";
+
+/**
+ * Guarda o actualiza un usuario en Firestore después de registrarse o verificar su teléfono.
+ */
+export const saveUserToFirestore = async (user: any, phoneNumber?: string) => {
+  if (!user) return;
+
+  try {
+    await setDoc(
+      doc(db, "users", user.uid),
+      {
+        email: user.email || null,
+        phoneNumber: phoneNumber || user.phoneNumber || null,
+        verified: true,
+        createdAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    console.log("✅ Usuario guardado o actualizado en Firestore");
+  } catch (error) {
+    console.error("❌ Error guardando usuario en Firestore:", error);
+  }
+};
