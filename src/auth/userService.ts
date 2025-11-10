@@ -1,45 +1,45 @@
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+// src/auth/userService.ts
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
-import { User } from "firebase/auth";
 
-/**
- * Crea el documento del usuario en Firestore si no existe.
- * Si ya existe, puede actualizar algunos datos (como el rol).
- */
-export const ensureUserDoc = async (user: User) => {
-  if (!user?.uid) return;
+// 🔧 Crea o actualiza el documento del usuario en Firestore
+export async function ensureUserDoc(user: any) {
+  if (!user) return;
 
   const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
+  const snap = await getDoc(userRef);
 
-  // 🔹 Si el usuario no existe, lo creamos
-  if (!userSnap.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email || null,
-      phoneNumber: user.phoneNumber || null,
-      displayName: user.displayName || "Nuevo usuario",
-      createdAt: serverTimestamp(),
-      verified: !!user.phoneNumber,
-      role: "user", // 👈 rol por defecto
-    });
-    console.log("✅ Documento de usuario creado con rol 'user':", user.uid);
+  // 📞 Si el "correo" es virtual (registrado con número)
+  const phoneMatch = user.email?.match(/^(\d+)@phone\.locallinkai\.app$/);
+  const phoneFromEmail = phoneMatch ? `+${phoneMatch[1]}` : null;
+
+  const userData = {
+    uid: user.uid,
+    email: phoneMatch ? null : user.email || null,
+    phoneNumber: user.phoneNumber || phoneFromEmail || null,
+    createdAt: new Date(),
+  };
+
+  if (!snap.exists()) {
+    // 🆕 Si no existe, lo creamos
+    await setDoc(userRef, userData);
+    console.log("✅ Documento de usuario creado:", userData);
   } else {
-    // 🔹 Si ya existe, actualizamos info básica
-    await updateDoc(userRef, {
-      email: user.email || null,
-      phoneNumber: user.phoneNumber || null,
-      verified: !!user.phoneNumber,
-    });
-    console.log("⚙️ Usuario existente actualizado:", user.uid);
-  }
-};
+    // 🔄 Si ya existe, actualizamos datos si algo cambió
+    const existing = snap.data();
+    const updates: any = {};
 
-/**
- * Permite cambiar el rol de un usuario manualmente.
- */
-export const setUserRole = async (uid: string, role: string) => {
-  const userRef = doc(db, "users", uid);
-  await updateDoc(userRef, { role });
-  console.log(`🔑 Rol actualizado para ${uid}: ${role}`);
-};
+    if (userData.phoneNumber && userData.phoneNumber !== existing.phoneNumber) {
+      updates.phoneNumber = userData.phoneNumber;
+    }
+
+    if (userData.email && userData.email !== existing.email) {
+      updates.email = userData.email;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await updateDoc(userRef, updates);
+      console.log("🔄 Documento de usuario actualizado:", updates);
+    }
+  }
+}
