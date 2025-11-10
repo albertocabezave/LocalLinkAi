@@ -1,17 +1,18 @@
 import React, { useState } from "react";
-import { auth } from "../firebase/firebaseConfig";
 import {
   RecaptchaVerifier,
-  linkWithPhoneNumber,
+  PhoneAuthProvider,
+  linkWithCredential,
 } from "firebase/auth";
+import { auth } from "../firebase/firebaseConfig";
 
 export default function PhoneVerification({ onVerified }: { onVerified: () => void }) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [verificationId, setVerificationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // ⚙️ Inicializa el reCAPTCHA
+  // ⚙️ Inicializa reCAPTCHA invisible solo una vez
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
@@ -27,34 +28,37 @@ export default function PhoneVerification({ onVerified }: { onVerified: () => vo
       return;
     }
 
-    setLoading(true);
-    setupRecaptcha();
-
     try {
+      setLoading(true);
+      setupRecaptcha();
       const appVerifier = window.recaptchaVerifier;
-      const confirmation = await linkWithPhoneNumber(auth.currentUser, phone, appVerifier);
-      setConfirmationResult(confirmation);
+
+      const provider = new PhoneAuthProvider(auth);
+      const id = await provider.verifyPhoneNumber(phone, appVerifier);
+      setVerificationId(id);
+
       alert("✅ Código enviado al número: " + phone);
     } catch (error: any) {
-      console.error(error);
+      console.error("❌ Error al enviar el código:", error);
       alert("❌ Error al enviar el código: " + error.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  // ✅ Confirmar el código de verificación
+  // ✅ Confirmar el código de verificación y vincular el número con el usuario
   const verifyCode = async () => {
-    if (!confirmationResult) return alert("Primero debes enviar el código.");
+    if (!verificationId) return alert("Primero debes enviar el código.");
 
     try {
-      const result = await confirmationResult.confirm(code);
-      const user = result.user;
-      alert("✅ Teléfono verificado y vinculado: " + user.phoneNumber);
+      const credential = PhoneAuthProvider.credential(verificationId, code);
+      await linkWithCredential(auth.currentUser!, credential);
+
+      alert("✅ Teléfono verificado y vinculado correctamente.");
       onVerified();
     } catch (error: any) {
-      console.error(error);
-      alert("❌ Código incorrecto o expirado.");
+      console.error("❌ Error al verificar el código:", error);
+      alert("❌ Código incorrecto o ya vinculado a otra cuenta.");
     }
   };
 
@@ -98,4 +102,5 @@ export default function PhoneVerification({ onVerified }: { onVerified: () => vo
       <div id="recaptcha-container" className="mt-4"></div>
     </div>
   );
-}
+}	
+

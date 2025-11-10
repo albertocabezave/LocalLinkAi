@@ -3,21 +3,23 @@ import UniversalLogin from "./components/UniversalLogin";
 import PhoneVerification from "./components/PhoneVerification";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase/firebaseConfig";
+import { ensureUserDoc } from "./auth/userService";
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [verified, setVerified] = useState(false);
 
   // 🔍 Escucha cambios en el estado de autenticación
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setLoading(false);
-      if (currentUser?.phoneNumber) {
-        setVerified(true);
+
+      if (currentUser) {
+        await ensureUserDoc(currentUser); // 👈 Crea/verifica el documento en Firestore
       }
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -34,34 +36,30 @@ export default function App() {
     return <UniversalLogin onLogin={setUser} />;
   }
 
-  // 📱 Si hay usuario pero no tiene teléfono verificado, mostrar pantalla de verificación
-  if (!verified) {
+  // 📱 Si el usuario NO tiene número de teléfono verificado
+  if (!user.phoneNumber) {
     return (
       <PhoneVerification
         onVerified={() => {
-          setVerified(true);
-          window.location.reload();
+          // ✅ Actualiza el estado del usuario después de verificar
+          setUser(auth.currentUser);
         }}
       />
     );
   }
 
-  // ✅ Si ya está autenticado y con teléfono verificado, mostrar la app principal
+  // 🏠 Si todo está verificado, muestra la app principal
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-      <h1 className="text-3xl font-bold text-blue-700 mb-4">
-        Bienvenido, {user.email || user.phoneNumber}
+    <div className="h-screen flex items-center justify-center bg-green-100">
+      <h1 className="text-2xl font-bold text-green-700">
+        ✅ Bienvenido, {user.email || user.phoneNumber}
       </h1>
-      <p className="text-gray-600 mb-6">Ya estás dentro de LocalLink AI</p>
       <button
-        onClick={() => {
-          import("./auth/authService").then(({ logoutUser }) => logoutUser());
-        }}
-        className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+        onClick={() => auth.signOut()}
+        className="ml-4 bg-red-500 text-white px-4 py-2 rounded"
       >
         Cerrar sesión
       </button>
     </div>
   );
-}	
-
+}
