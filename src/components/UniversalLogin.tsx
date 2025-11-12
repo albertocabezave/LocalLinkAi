@@ -1,7 +1,7 @@
 // src/components/UniversalLogin.tsx
 
 // 🗓️ 2025-11-12
-// Contexto: Login unificado (correo o teléfono) + registro + verificación SMS
+// Contexto: Login unificado (correo o teléfono) + registro + verificación SMS + guardado en Firestore
 
 import React, { useEffect, useState } from "react";
 import {
@@ -13,7 +13,7 @@ import {
   linkWithCredential,
 } from "firebase/auth";
 import { auth, db } from "../firebase/firebaseConfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
 
 // 🔍 Buscar email real asociado a número en Firestore
 const findUserEmailByPhone = async (phoneNumber: string): Promise<string | null> => {
@@ -48,7 +48,7 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Para verificación SMS
+  // Verificación SMS
   const [smsSent, setSmsSent] = useState(false);
   const [confirmationResultStored, setConfirmationResultStored] = useState<any>(null);
   const [smsCode, setSmsCode] = useState("");
@@ -63,7 +63,7 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
       .catch(() => {});
   }, []);
 
-  // Construye +584141234567
+  // Construye número en formato internacional
   const buildNormalizedPhone = () => {
     const op = operatorCode.replace(/\D/g, "");
     const rest = phoneRest.replace(/\D/g, "");
@@ -72,16 +72,22 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
     return `${cc}${op}${rest}`;
   };
 
+  // Convierte teléfono en correo virtual para Firebase
   const phoneToVirtualEmail = (normalizedPhone: string) => {
     const digits = normalizedPhone.replace(/\+/g, "");
     return `${digits}@phone.locallinkai.app`;
   };
 
+  // Configura reCAPTCHA invisible
   const setupRecaptcha = () => {
     // @ts-ignore
     if (!window.recaptchaVerifier) {
       // @ts-ignore
-      window.recaptchaVerifier = new RecaptchaVerifier("recaptcha-container", { size: "invisible" }, auth);
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        "recaptcha-container",
+        { size: "invisible" },
+        auth
+      );
     }
   };
 
@@ -89,7 +95,6 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
   const handleLogin = async () => {
     setError("");
     setLoading(true);
-
     try {
       let loginEmail = emailInput.trim().toLowerCase();
 
@@ -105,6 +110,7 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
       }
 
       await signInWithEmailAndPassword(auth, loginEmail, password);
+      console.log("✅ Usuario logueado:", auth.currentUser?.email);
       onLogin(auth.currentUser);
     } catch (err: any) {
       console.error("❌ Login error:", err);
@@ -136,7 +142,11 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
         // @ts-ignore
         const appVerifier = window.recaptchaVerifier;
         const normalizedPhone = buildNormalizedPhone();
-        const confirmationResult = await signInWithPhoneNumber(auth, normalizedPhone, appVerifier);
+        const confirmationResult = await signInWithPhoneNumber(
+          auth,
+          normalizedPhone,
+          appVerifier
+        );
         setConfirmationResultStored(confirmationResult);
         setSmsSent(true);
         setError("Código SMS enviado. Ingresa el código para vincular tu teléfono.");
@@ -162,14 +172,33 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
       }
 
       const result = await confirmationResultStored.confirm(smsCode);
-      const verificationId = confirmationResultStored.verificationId || (result as any).verificationId;
+      const verificationId =
+        confirmationResultStored.verificationId || (result as any).verificationId;
       const credential = PhoneAuthProvider.credential(verificationId, smsCode);
       await linkWithCredential(auth.currentUser!, credential);
 
-      onLogin(auth.currentUser);
-      setSmsSent(false);
-      setSmsCode("");
-      setError("Teléfono verificado y vinculado correctamente.");
+      // ✅ Crear registro del usuario en Firestore
+      await auth.currentUser?.reload();
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          phone: buildNormalizedPhone(),
+          createdAt: new Date().toISOString(),
+        });
+        console.log("✅ Usuario guardado en Firestore:", user.email);
+      }
+
+      // 🔁 Espera un poco para que Firebase actualice la sesión antes de redirigir
+      setTimeout(() => {
+        console.log("🚀 Redirigiendo al usuario:", auth.currentUser?.email);
+        onLogin(auth.currentUser);
+        setSmsSent(false);
+        setSmsCode("");
+        setError("Teléfono verificado y vinculado correctamente.");
+      }, 500);
     } catch (err: any) {
       console.error("Error confirmando SMS / link:", err);
       setError(err?.message || "Código inválido o error de vinculación.");
@@ -194,13 +223,17 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
       <div className="mb-3">
         <button
           onClick={() => setUsePhoneMode(false)}
-          className={`px-3 py-1 rounded-l ${!usePhoneMode ? "bg-blue-600 text-white" : "bg-white border"}`}
+          className={`px-3 py-1 rounded-l ${
+            !usePhoneMode ? "bg-blue-600 text-white" : "bg-white border"
+          }`}
         >
           Correo
         </button>
         <button
           onClick={() => setUsePhoneMode(true)}
-          className={`px-3 py-1 rounded-r ${usePhoneMode ? "bg-blue-600 text-white" : "bg-white border"}`}
+          className={`px-3 py-1 rounded-r ${
+            usePhoneMode ? "bg-blue-600 text-white" : "bg-white border"
+          }`}
         >
           Teléfono
         </button>
@@ -216,7 +249,11 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
         />
       ) : (
         <div className="flex gap-2 mb-2 items-center">
-          <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)} className="border rounded p-2 w-28 bg-white">
+          <select
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value)}
+            className="border rounded p-2 w-28 bg-white"
+          >
             <option value="+58">🇻🇪 +58</option>
             <option value="+57">🇨🇴 +57</option>
             <option value="+1">🇺🇸 +1</option>
@@ -252,12 +289,16 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
         className="border p-2 rounded mb-4 w-72"
       />
 
-      {error && <p className="text-red-500 text-sm mb-3 max-w-[320px] text-center">{error}</p>}
+      {error && (
+        <p className="text-red-500 text-sm mb-3 max-w-[320px] text-center">{error}</p>
+      )}
 
       <button
         onClick={handleAuth}
         disabled={loading}
-        className={`${loading ? "bg-blue-300" : "bg-blue-500 hover:bg-blue-600"} text-white px-4 py-2 rounded mb-3`}
+        className={`${
+          loading ? "bg-blue-300" : "bg-blue-500 hover:bg-blue-600"
+        } text-white px-4 py-2 rounded mb-3`}
       >
         {loading ? "Procesando..." : isLogin ? "Entrar" : "Registrarse"}
       </button>
@@ -271,15 +312,23 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
             onChange={(e) => setSmsCode(e.target.value)}
             className="border p-2 rounded mb-2 w-48"
           />
-          <button onClick={handleConfirmAndLink} className="bg-green-500 text-white px-3 py-1 rounded ml-2">
+          <button
+            onClick={handleConfirmAndLink}
+            className="bg-green-500 text-white px-3 py-1 rounded ml-2"
+          >
             Confirmar código
           </button>
         </div>
       )}
 
       <div className="flex gap-2 items-center">
-        <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-700 underline">
-          {isLogin ? "¿No tienes cuenta? Crear una" : "¿Ya tienes cuenta? Inicia sesión"}
+        <button
+          onClick={() => setIsLogin(!isLogin)}
+          className="text-sm text-blue-700 underline"
+        >
+          {isLogin
+            ? "¿No tienes cuenta? Crear una"
+            : "¿Ya tienes cuenta? Inicia sesión"}
         </button>
 
         <button
@@ -293,7 +342,9 @@ export default function UniversalLogin({ onLogin }: { onLogin: (user: any) => vo
                 .then((confirmationResult) => {
                   setConfirmationResultStored(confirmationResult);
                   setSmsSent(true);
-                  setError("Código SMS enviado. Introduce el código y pulsa 'Confirmar código'.");
+                  setError(
+                    "Código SMS enviado. Introduce el código y pulsa 'Confirmar código'."
+                  );
                 })
                 .catch((err) => setError("Error enviando SMS: " + err.message));
             } else {
